@@ -2,20 +2,41 @@ const form = document.querySelector("#chat-form");
 const input = document.querySelector("#message");
 const send = document.querySelector("#send");
 const messages = document.querySelector("#messages");
-const mode = document.querySelector("#mode");
+const status = document.querySelector("#service-status");
 let busy = false;
 
-function bubble(role, content, source) {
+function bubble(role, content, source, agent, citations) {
   const item = document.createElement("div");
   item.className = `bubble ${role}`;
   const heading = document.createElement("span");
   heading.className = "meta";
-  heading.textContent = role === "user" ? "Bạn" : "Trợ lý";
+  const labels = { qa: "Q&A Agent", ticket: "Ticket Agent", research: "Research Agent" };
+  heading.textContent = role === "user" ? "Bạn" : (labels[agent] || "Trợ lý");
   item.append(heading, document.createTextNode(content));
   if (source && source.length) {
     const label = document.createElement("span");
     label.className = "source";
     label.textContent = `Nguồn: ${source.join(", ")}`;
+    item.append(label);
+  }
+  if (citations && citations.length) {
+    const label = document.createElement("span");
+    label.className = "source";
+    label.append(document.createTextNode("Nguồn web: "));
+    let linked = 0;
+    citations.slice(0, 5).forEach(citation => {
+      try {
+        const url = new URL(citation.url);
+        if (url.protocol !== "https:") return;
+        if (linked++) label.append(document.createTextNode(" · "));
+        const link = document.createElement("a");
+        link.href = url.href;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.textContent = citation.title || url.hostname;
+        label.append(link);
+      } catch { /* Skip malformed source URLs. */ }
+    });
     item.append(label);
   }
   messages.append(item);
@@ -62,7 +83,7 @@ async function decide(id, approve, buttons, card) {
 }
 
 function approvalCard(result) {
-  const card = bubble("assistant", `Đề xuất tạo phiếu: ${result.draft.content}\nChưa có phiếu nào được tạo. Bạn có phê duyệt không?`);
+  const card = bubble("assistant", `Đề xuất tạo phiếu: ${result.draft.content}\nChưa có phiếu nào được tạo. Bạn có phê duyệt không?`, null, "ticket");
   const actions = document.createElement("div");
   actions.className = "actions";
   const approve = document.createElement("button");
@@ -88,7 +109,7 @@ async function sendMessage(message) {
   try {
     const result = await post("/chat", { message: trimmed });
     if (result.kind === "approval_required") approvalCard(result);
-    else if (result.kind === "answer") bubble("assistant", result.answer, result.sources);
+    else if (result.kind === "answer") bubble("assistant", result.answer, result.sources, result.agent, result.citations);
     else throw new Error("Máy chủ trả về loại phản hồi không hợp lệ.");
   } catch (error) {
     bubble("assistant", `Không thể gửi tin nhắn: ${error.message}`);
@@ -111,6 +132,9 @@ input.addEventListener("keydown", event => {
 document.querySelectorAll(".example").forEach(button => {
   button.addEventListener("click", () => sendMessage(button.dataset.message));
 });
-fetch("/health").then(response => response.json()).then(result => {
-  mode.textContent = result.mode === "demo" ? "Chế độ diễn tập" : "Chế độ AI thật";
-}).catch(() => { mode.textContent = "Máy chủ chưa sẵn sàng"; });
+fetch("/health").then(response => {
+  if (!response.ok) throw new Error("Health check failed");
+  return response.json();
+}).then(() => {
+  status.textContent = "AI thật · local";
+}).catch(() => { status.textContent = "Máy chủ chưa sẵn sàng"; });

@@ -2,10 +2,7 @@ ARG PYTHON_IMAGE=python:3.14-slim
 FROM ${PYTHON_IMAGE} AS builder
 WORKDIR /build
 COPY requirements.txt requirements-live.txt ./
-ARG INCLUDE_LIVE=0
-RUN requirements=requirements.txt; \
-    if [ "$INCLUDE_LIVE" = 1 ]; then requirements=requirements-live.txt; fi; \
-    python -m pip install --no-cache-dir --prefix=/install -r "$requirements"
+RUN python -m pip install --no-cache-dir --prefix=/install -r requirements-live.txt
 
 FROM ${PYTHON_IMAGE} AS runtime
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 WORKSHOP_HOST=0.0.0.0 WORKSHOP_PORT=8000 WORKSHOP_DB=/data/state/workshop.db

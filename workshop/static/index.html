@@ -52,11 +52,11 @@
   <main class="shell">
     <header>
       <div>
-        <div class="eyebrow">AI in Enterprise · Local demo</div>
+        <div class="eyebrow">AI in Enterprise · Live AI</div>
         <h1>Trợ lý AI hỗ trợ</h1>
         <p class="intro">Hỏi về quy trình hỗ trợ, hoặc yêu cầu tạo phiếu. Một đề xuất chỉ trở thành phiếu sau khi bạn phê duyệt.</p>
       </div>
-      <span id="mode" class="badge">Đang kiểm tra…</span>
+      <span id="service-status" class="badge">Đang kiểm tra…</span>
     </header>
     <div class="grid">
       <section class="panel" aria-label="Hội thoại">
@@ -76,12 +76,13 @@
         <h2>Thử ngay</h2>
         <button class="example" type="button" data-message="Phiếu hỗ trợ mới có trạng thái gì?">1. Hỏi về trạng thái phiếu</button>
         <button class="example" type="button" data-message="Tạo phiếu hỗ trợ cho lỗi đăng nhập VPN">2. Đề xuất tạo phiếu VPN</button>
+        <button class="example" type="button" data-message="Tìm trên web hướng dẫn bảo mật VPN mới nhất và dẫn nguồn">3. Research web về VPN</button>
         <ol class="steps">
           <li><strong>Tra cứu:</strong> xem câu trả lời và nguồn tri thức.</li>
           <li><strong>Đề xuất:</strong> chưa ghi dữ liệu khi chưa duyệt.</li>
           <li><strong>Phê duyệt:</strong> phiếu được tạo một lần, trạng thái Pending.</li>
         </ol>
-        <p class="notice">Chế độ diễn tập sử dụng phản hồi xác định, không gọi mô hình AI. Hội thoại trên màn hình không được lưu làm bộ nhớ hội thoại.</p>
+        <p class="notice">Câu trả lời được tạo bởi mô hình AI thật và có thể thay đổi giữa các lượt. Chỉ dùng dữ liệu giả lập; hội thoại trên màn hình không được lưu làm bộ nhớ hội thoại.</p>
       </aside>
     </div>
   </main>

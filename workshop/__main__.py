@@ -1,4 +1,4 @@
-"""Serve the app or rehearse the same HTTP workflow against any demo instance."""
+"""Serve the live AI app or run its HTTP workflow against a running instance."""
 import argparse
 from functools import partial
 import json
@@ -38,7 +38,7 @@ def call(base, path, *, payload=None, expect=200):
 
 def rehearse(base):
     health, _ = call(base, "/health")
-    print(f"1. Máy chủ hoạt động | chế độ {health['mode']}")
+    print("1. Máy chủ hoạt động | AI thật")
     answer, request_id = call(base, "/chat", payload={"message": "Phiếu hỗ trợ mới có trạng thái gì?"})
     if answer.get("kind") != "answer" or "ticket-policy" not in answer["sources"] or "pending" not in answer["answer"].lower():
         raise RuntimeError(f"Unexpected FAQ response: {answer}")
@@ -74,30 +74,51 @@ def load_local_env(path: Path | None = None):
                 override=False)
 
 
+def load_live_settings(environ=None):
+    environ = os.environ if environ is None else environ
+    names = {
+        "api_key": "OPENAI_API_KEY",
+        "chat_model": "WORKSHOP_CHAT_MODEL",
+        "embedding_model": "WORKSHOP_EMBEDDING_MODEL",
+        "tavily_key": "TAVILY_API_KEY",
+    }
+    missing = [name for name in names.values() if not environ.get(name, "").strip()]
+    if missing:
+        raise ValueError("Live AI requires " + ", ".join(missing) + ". Configure them in .env.")
+    return {setting: environ[name] for setting, name in names.items()}
+
+
+def research_timeout_seconds(environ=None):
+    environ = os.environ if environ is None else environ
+    name = "WORKSHOP_RESEARCH_TIMEOUT_SECONDS"
+    try:
+        seconds = int(environ.get(name, "120"))
+    except (TypeError, ValueError):
+        raise ValueError(f"{name} must be an integer from 10 to 300.") from None
+    if not 10 <= seconds <= 300:
+        raise ValueError(f"{name} must be an integer from 10 to 300.")
+    return seconds
+
+
 def serve():
     load_local_env()
     import uvicorn
 
     from .agent_runtime import create_app
-    from .tools import demo_turn, live_turn
+    from .tools import live_agents
 
     host = os.getenv("WORKSHOP_HOST", "127.0.0.1")
     port = int(os.getenv("WORKSHOP_PORT", "8000"))
-    mode = os.getenv("WORKSHOP_MODE", "demo")
     hosted = os.getenv("WORKSHOP_HOSTED", "0") == "1"
-    factory = demo_turn
-    if mode == "live":
-        required = ("OPENAI_API_KEY", "WORKSHOP_CHAT_MODEL", "WORKSHOP_EMBEDDING_MODEL")
-        if any(not os.getenv(name) for name in required):
-            raise ValueError("Live mode requires " + ", ".join(required))
-        factory = partial(live_turn, chat_model=os.environ["WORKSHOP_CHAT_MODEL"],
-                          embedding_model=os.environ["WORKSHOP_EMBEDDING_MODEL"],
-                          api_key=os.environ["OPENAI_API_KEY"])
-    elif mode != "demo":
-        raise ValueError("WORKSHOP_MODE must be demo or live.")
+    settings = load_live_settings()
+    research_timeout = research_timeout_seconds()
+    factory = partial(live_agents, chat_model=settings["chat_model"],
+                      embedding_model=settings["embedding_model"], api_key=settings["api_key"],
+                      tavily_key=settings["tavily_key"],
+                      research_timeout=research_timeout)
     app = create_app(Path(os.getenv("WORKSHOP_DB", "data/workshop.db")),
                      token=os.getenv("WORKSHOP_TOKEN"), hosted=hosted,
-                     mode=mode, turn_factory=factory)
+                     agents_factory=factory)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     # Keep dependency logs (including request URLs) out of the presenter log.
     logging.getLogger("httpx").setLevel(logging.WARNING)
@@ -111,6 +132,9 @@ def main():
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("serve")
     commands.add_parser("health")
+    graph_command = commands.add_parser("graph", help="Save the real LangGraph diagram as PNG")
+    graph_command.add_argument("--output", type=Path,
+                               default=Path(__file__).resolve().parents[1] / "graph_visualization.png")
     demo = commands.add_parser("demo")
     demo.add_argument("--url", default="http://127.0.0.1:8000")
     args = parser.parse_args()
@@ -123,6 +147,9 @@ def main():
             with urlopen(f"http://127.0.0.1:{port}/health", timeout=2) as response:
                 if response.status != 200:
                     raise RuntimeError("Unhealthy server.")
+        elif args.command == "graph":
+            from .agent_runtime import save_graph_visualization
+            print(f"Graph visualization saved to: {save_graph_visualization(args.output)}")
         else:
             rehearse(args.url)
     except (ValueError, RuntimeError, URLError) as exc:

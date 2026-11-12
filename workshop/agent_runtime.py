@@ -1,4 +1,4 @@
-"""FastAPI transport and one bounded LangGraph workflow."""
+"""FastAPI transport and a bounded three-agent LangGraph workflow."""
 from contextlib import asynccontextmanager
 from pathlib import Path
 import sqlite3
@@ -14,14 +14,23 @@ from .identity import presenter_gate
 from .memory import CapacityReached, Store
 from .observability import LimitBody, event, request_log
 from .policy import DecisionConflict, TicketDraft
-from .tools import ProviderUnavailable, demo_turn
+from .tools import ProviderUnavailable
 
 
 class Turn(TypedDict, total=False):
     message: str
+    route: str
+    agent: str
     answer: str
+    context: str
     sources: list[str]
+    citations: list[dict[str, str]]
     draft: TicketDraft
+    ticket_call: object
+    research_query: str
+    research_call: object
+    research_observation: str
+    research_tool_message: object
 
 
 class Chat(BaseModel):
@@ -34,19 +43,56 @@ class Decision(BaseModel):
     approve: StrictBool
 
 
-def create_app(db: Path, *, token=None, hosted=False, mode="demo", turn_factory=demo_turn):
+def build_graph(agents):
+    """Compile the real routing/tool graph; agents are only called on invocation."""
+    graph = StateGraph(Turn)
+
+    def route(state):
+        destination = agents.route(state["message"])
+        if destination not in {"qa", "ticket", "research"}:
+            raise ProviderUnavailable
+        return {"route": destination}
+
+    graph.add_node("router", route)
+    graph.add_node("qa_retrieval", lambda state: agents.qa_retrieve(state["message"]))
+    graph.add_node("qa_agent", lambda state: {
+        **agents.qa_answer(state["message"], state["context"]), "agent": "qa"})
+    graph.add_node("ticket_agent", lambda state: {
+        "ticket_call": agents.ticket_agent(state["message"])})
+    graph.add_node("ticket_draft_tool", lambda state: {
+        "draft": agents.ticket_draft_tool(state["ticket_call"]), "agent": "ticket"})
+    graph.add_node("research_agent", lambda state: agents.research_agent(state))
+    graph.add_node("research_web_tool", lambda state: agents.research_web_tool(
+        state["research_query"], state["research_call"]))
+
+    graph.add_edge(START, "router")
+    graph.add_conditional_edges("router", lambda state: state["route"], {
+        "qa": "qa_retrieval", "ticket": "ticket_agent", "research": "research_agent"})
+    for first, second in (("qa_retrieval", "qa_agent"),
+                          ("ticket_agent", "ticket_draft_tool")):
+        graph.add_edge(first, second)
+        graph.add_edge(second, END)
+    graph.add_conditional_edges("research_agent", lambda state: "done" if "answer" in state else "search",
+                                {"done": END, "search": "research_web_tool"})
+    graph.add_edge("research_web_tool", "research_agent")
+    return graph.compile()
+
+
+def save_graph_visualization(output: Path) -> Path:
+    """Render the compiled graph without initializing models or calling the provider."""
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_bytes(build_graph(None).get_graph().draw_mermaid_png())
+    return output
+
+
+def create_app(db: Path, *, agents_factory, token=None, hosted=False):
     gate = presenter_gate(token, hosted)
     store = Store(db)
 
     @asynccontextmanager
     async def lifespan(app):
         store.initialize()
-        turn = turn_factory()
-        graph = StateGraph(Turn)
-        graph.add_node("support", lambda state: turn(state["message"]))
-        graph.add_edge(START, "support")
-        graph.add_edge("support", END)
-        app.state.graph = graph.compile()
+        app.state.graph = build_graph(agents_factory())
         yield
 
     app = FastAPI(title="Mini Enterprise AI Support Agent", lifespan=lifespan,
@@ -69,25 +115,29 @@ def create_app(db: Path, *, token=None, hosted=False, mode="demo", turn_factory=
 
     @app.get("/health")
     def health():
-        return {"status": "ok", "mode": mode}
+        return {"status": "ok"}
 
     @app.post("/chat", dependencies=[Depends(gate)])
     def chat(body: Chat, request: Request):
         try:
-            result = request.app.state.graph.invoke({"message": body.message})
+            result = request.app.state.graph.invoke({"message": body.message},
+                                                    config={"recursion_limit": 8})
             if "draft" not in result:
-                return {"kind": "answer", "answer": result["answer"], "sources": result["sources"]}
+                return {"kind": "answer", "agent": result["agent"],
+                        "answer": result["answer"], "sources": result.get("sources", []),
+                        "citations": result.get("citations", [])}
             draft = result["draft"]
             approval = store.propose(draft.content)
         except ProviderUnavailable:
             event("provider_unavailable", request_id=request.state.request_id)
-            raise HTTPException(503, "Model provider unavailable. Retry or rehearse in demo mode.") from None
+            raise HTTPException(503, "AI or search provider unavailable. Check server logs and retry.") from None
         except CapacityReached:
-            raise HTTPException(503, "Demo store is full; use a fresh database.") from None
+            raise HTTPException(503, "Ticket store is full; use a fresh database.") from None
         except sqlite3.OperationalError:
-            raise HTTPException(503, "Demo store unavailable.") from None
+            raise HTTPException(503, "Ticket store unavailable.") from None
         event("approval_requested", request_id=request.state.request_id, approval_id=approval)
-        return {"kind": "approval_required", "approval_id": approval, "draft": draft.model_dump()}
+        return {"kind": "approval_required", "agent": "ticket",
+                "approval_id": approval, "draft": draft.model_dump()}
 
     @app.post("/approvals/{approval_id}", dependencies=[Depends(gate)])
     def approval(approval_id: UUID, body: Decision, request: Request):
@@ -96,7 +146,7 @@ def create_app(db: Path, *, token=None, hosted=False, mode="demo", turn_factory=
         except DecisionConflict as exc:
             raise HTTPException(409, str(exc)) from None
         except sqlite3.OperationalError:
-            raise HTTPException(503, "Demo store unavailable.") from None
+            raise HTTPException(503, "Ticket store unavailable.") from None
         if result is None:
             raise HTTPException(404, "Approval not found.")
         event("approval_decided", request_id=request.state.request_id,
@@ -108,7 +158,7 @@ def create_app(db: Path, *, token=None, hosted=False, mode="demo", turn_factory=
         try:
             result = store.ticket(str(ticket_id))
         except sqlite3.OperationalError:
-            raise HTTPException(503, "Demo store unavailable.") from None
+            raise HTTPException(503, "Ticket store unavailable.") from None
         if result is None:
             raise HTTPException(404, "Ticket not found.")
         return result
