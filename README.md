@@ -20,6 +20,8 @@ Mở terminal thứ hai, cũng tại thư mục này:
 .\.venv\Scripts\python -m workshop demo
 ```
 
+Hoặc mở **[giao diện chat](http://127.0.0.1:8000/)** trên trình duyệt. Chọn câu hỏi mẫu để xem nguồn tri thức, sau đó thử đề xuất tạo phiếu và nhấn **Phê duyệt** hoặc **Từ chối**. Trang chat chỉ phục vụ chế độ local không có token; khi bật `WORKSHOP_HOSTED=1` hoặc đặt `WORKSHOP_TOKEN`, giao diện không được mở để tránh dùng token người trình bày trong trình duyệt.
+
 Kịch bản sẽ kiểm tra health, trả lời FAQ kèm nguồn, từ chối một yêu cầu tạo phiếu, sau đó duyệt một yêu cầu khác và xác nhận duyệt lại không tạo phiếu trùng.
 
 Có thể thao tác thủ công tại [tài liệu API](http://127.0.0.1:8000/docs). Chỉ sử dụng dữ liệu giả lập; không nhập thông tin khách hàng thật.
@@ -42,7 +44,7 @@ Compose chỉ mở cổng trên máy local và giữ volume dữ liệu sau khi 
 Chỉ bật sau khi đã chạy thử chế độ diễn tập và có API key được cấp phép, kèm ngân sách phù hợp. Truy vấn và kho tri thức giả lập sẽ được gửi tới nhà cung cấp mô hình.
 
 1. Cài thêm `requirements-live.txt` vào môi trường ảo.
-2. Đặt các biến `WORKSHOP_MODE=live`, `OPENAI_API_KEY`, `WORKSHOP_CHAT_MODEL`, `WORKSHOP_EMBEDDING_MODEL` cho tiến trình máy chủ. Chọn model ID tài khoản được phép dùng; chat model cần hỗ trợ gọi công cụ.
+2. Mở tệp `.env` ở thư mục gốc dự án; điền `OPENAI_API_KEY`, `WORKSHOP_CHAT_MODEL`, `WORKSHOP_EMBEDDING_MODEL`, rồi đổi `WORKSHOP_MODE=live`. Chọn model ID tài khoản được phép dùng; chat model cần hỗ trợ gọi công cụ. Không đưa tệp này lên Git hoặc chia sẻ cho người khác. Biến môi trường được đặt trực tiếp trong tiến trình sẽ được ưu tiên hơn tệp `.env`.
 3. Khởi chạy lại cùng máy chủ. FAISS được lập chỉ mục một lần lúc khởi động; mỗi lượt hỏi chỉ cần nhúng truy vấn. Chỉ mục nằm trong RAM và được tạo lại khi khởi động lại. Không nạp chỉ mục đã tuần tự hóa.
 4. Câu trả lời và việc chọn công cụ có thể khác nhau. Nếu dịch vụ lỗi, hãy chạy lại ở chế độ `demo`; ứng dụng không âm thầm thay câu trả lời AI thật bằng câu trả lời giả lập.
 

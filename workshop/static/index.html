@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <link rel="icon" href="data:,">
+  <title>Trợ lý AI hỗ trợ · Demo doanh nghiệp</title>
+  <style>
+    :root { font-family: Inter, "Segoe UI", system-ui, sans-serif; color: #1b2838; background: #f3f6fa; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; }
+    button, textarea { font: inherit; }
+    button { cursor: pointer; }
+    button:disabled { cursor: not-allowed; opacity: .55; }
+    button:focus-visible, textarea:focus-visible { outline: 3px solid #2267d6; outline-offset: 2px; }
+    .shell { max-width: 1020px; margin: 0 auto; padding: 28px 20px 40px; }
+    header { display: flex; justify-content: space-between; align-items: start; gap: 16px; margin-bottom: 22px; }
+    .eyebrow { color: #3561a4; font-size: .75rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+    h1 { font-size: clamp(1.55rem, 4vw, 2.4rem); margin: 6px 0; letter-spacing: -.04em; }
+    .intro { margin: 0; color: #526176; max-width: 62ch; line-height: 1.5; }
+    .badge { flex: 0 0 auto; border: 1px solid #c8d6e8; background: #fff; color: #33557e; padding: 8px 12px; border-radius: 999px; font-size: .8rem; font-weight: 700; }
+    .grid { display: grid; grid-template-columns: minmax(0, 1fr) 240px; gap: 18px; align-items: start; }
+    .panel { border: 1px solid #d9e2ee; border-radius: 18px; background: #fff; box-shadow: 0 10px 30px rgba(26, 55, 96, .06); }
+    .conversation { min-height: 410px; max-height: 58vh; overflow: auto; padding: 22px; display: flex; flex-direction: column; gap: 16px; }
+    .bubble { max-width: 88%; padding: 13px 16px; border-radius: 16px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .assistant { background: #edf3fc; align-self: flex-start; border-bottom-left-radius: 4px; }
+    .user { background: #1d4c97; color: #fff; align-self: flex-end; border-bottom-right-radius: 4px; }
+    .meta { font-size: .76rem; font-weight: 700; opacity: .75; display: block; margin-bottom: 4px; }
+    .source { display: block; font-size: .8rem; color: #385c8b; margin-top: 8px; }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .actions button, .send { border: 0; border-radius: 10px; background: #1d4c97; color: #fff; padding: 9px 15px; font-weight: 700; }
+    .actions .secondary { background: #e4e9f1; color: #20354f; }
+    form { border-top: 1px solid #e3e9f1; padding: 16px; }
+    label { display: block; font-size: .84rem; font-weight: 700; margin-bottom: 8px; }
+    .composer { display: flex; gap: 9px; align-items: end; }
+    textarea { width: 100%; min-height: 64px; resize: vertical; border: 1px solid #b9c8db; border-radius: 11px; padding: 11px 13px; color: #1b2838; }
+    .send { min-height: 44px; }
+    .hint { color: #62728a; font-size: .76rem; margin: 8px 0 0; }
+    aside { padding: 19px; }
+    h2 { font-size: .96rem; margin: 0 0 12px; }
+    .example { width: 100%; text-align: left; border: 1px solid #d3dfef; background: #f7faff; color: #284b78; border-radius: 10px; padding: 11px; margin: 0 0 9px; line-height: 1.4; }
+    .steps { list-style: none; margin: 18px 0 0; padding: 0; border-top: 1px solid #e0e8f2; }
+    .steps li { margin-top: 13px; font-size: .82rem; color: #435976; line-height: 1.4; }
+    .steps strong { color: #1d4c97; }
+    .notice { margin-top: 18px; font-size: .75rem; color: #687891; line-height: 1.5; }
+    @media (max-width: 760px) { .shell { padding: 18px 12px 28px; } header { flex-wrap: wrap; } .grid { grid-template-columns: 1fr; } .conversation { min-height: 320px; max-height: 55vh; padding: 14px; } aside { order: -1; } .bubble { max-width: 95%; } }
+  </style>
+  <script src="/ui.js" defer></script>
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <div>
+        <div class="eyebrow">AI in Enterprise · Local demo</div>
+        <h1>Trợ lý AI hỗ trợ</h1>
+        <p class="intro">Hỏi về quy trình hỗ trợ, hoặc yêu cầu tạo phiếu. Một đề xuất chỉ trở thành phiếu sau khi bạn phê duyệt.</p>
+      </div>
+      <span id="mode" class="badge">Đang kiểm tra…</span>
+    </header>
+    <div class="grid">
+      <section class="panel" aria-label="Hội thoại">
+        <div id="messages" class="conversation" role="log" aria-live="polite" aria-relevant="additions text">
+          <div class="bubble assistant"><span class="meta">Trợ lý</span>Xin chào! Bạn có thể chọn một câu hỏi mẫu ở bên phải hoặc nhập câu hỏi của mình.</div>
+        </div>
+        <form id="chat-form">
+          <label for="message">Tin nhắn của bạn</label>
+          <div class="composer">
+            <textarea id="message" name="message" maxlength="1500" required placeholder="Ví dụ: Phiếu hỗ trợ mới có trạng thái gì?"></textarea>
+            <button id="send" class="send" type="submit">Gửi</button>
+          </div>
+          <p class="hint">Enter để gửi; Shift+Enter để xuống dòng. Chỉ dùng dữ liệu giả lập.</p>
+        </form>
+      </section>
+      <aside class="panel" aria-label="Hướng dẫn demo">
+        <h2>Thử ngay</h2>
+        <button class="example" type="button" data-message="Phiếu hỗ trợ mới có trạng thái gì?">1. Hỏi về trạng thái phiếu</button>
+        <button class="example" type="button" data-message="Tạo phiếu hỗ trợ cho lỗi đăng nhập VPN">2. Đề xuất tạo phiếu VPN</button>
+        <ol class="steps">
+          <li><strong>Tra cứu:</strong> xem câu trả lời và nguồn tri thức.</li>
+          <li><strong>Đề xuất:</strong> chưa ghi dữ liệu khi chưa duyệt.</li>
+          <li><strong>Phê duyệt:</strong> phiếu được tạo một lần, trạng thái Pending.</li>
+        </ol>
+        <p class="notice">Chế độ diễn tập sử dụng phản hồi xác định, không gọi mô hình AI. Hội thoại trên màn hình không được lưu làm bộ nhớ hội thoại.</p>
+      </aside>
+    </div>
+  </main>
+</body>
+</html>

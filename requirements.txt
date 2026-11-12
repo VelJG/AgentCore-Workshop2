@@ -2,3 +2,4 @@ fastapi
 uvicorn
 langgraph
 langchain-core
+python-dotenv

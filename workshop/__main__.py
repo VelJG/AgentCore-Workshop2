@@ -9,6 +9,8 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
 
+from dotenv import load_dotenv
+
 
 class NoRedirect(HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
@@ -66,7 +68,14 @@ def rehearse(base):
     print("ĐẠT: toàn bộ kịch bản diễn tập")
 
 
+def load_local_env(path: Path | None = None):
+    """Load optional local settings without overriding explicit process variables."""
+    load_dotenv(dotenv_path=path or Path(__file__).resolve().parents[1] / ".env",
+                override=False)
+
+
 def serve():
+    load_local_env()
     import uvicorn
 
     from .agent_runtime import create_app

@@ -6,6 +6,7 @@ from typing import TypedDict
 from uuid import UUID
 
 from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse
 from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, ConfigDict, Field, StrictBool
 
@@ -53,6 +54,18 @@ def create_app(db: Path, *, token=None, hosted=False, mode="demo", turn_factory=
                   redoc_url=None, openapi_url=None if hosted else "/openapi.json")
     app.add_middleware(LimitBody, limit=8192)
     app.middleware("http")(request_log)
+
+    if not hosted and not token:
+        static = Path(__file__).resolve().parent / "static"
+
+        @app.get("/", include_in_schema=False)
+        def chat_page():
+            return FileResponse(static / "index.html", headers={"Cache-Control": "no-store"})
+
+        @app.get("/ui.js", include_in_schema=False)
+        def chat_script():
+            return FileResponse(static / "ui.js", media_type="text/javascript",
+                                headers={"Cache-Control": "no-store"})
 
     @app.get("/health")
     def health():
